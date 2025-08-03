@@ -10,7 +10,27 @@
 
 from typing import Callable, Optional
 
+import torch
 from torch import Tensor, nn
+
+
+_gelu_fused_warmed = False
+
+@torch.compile
+def gelu_fused(x):
+    return 0.5 * x * (1 + torch.erf(x * 2**-0.5))
+
+def warmup_gelu_fused():
+    global _gelu_fused_warmed
+    if _gelu_fused_warmed:
+        return
+    for dtype in [torch.float32, torch.float16, torch.bfloat16]:
+        x = torch.rand((1024, 16), device="cuda", dtype=dtype)
+        y = gelu_fused(x)
+        y = gelu_fused(x)
+    _gelu_fused_warmed = True
+
+warmup_gelu_fused()
 
 
 class Mlp(nn.Module):
@@ -27,11 +47,21 @@ class Mlp(nn.Module):
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
         self.fc1 = nn.Linear(in_features, hidden_features, bias=bias)
-        self.act = act_layer()
+        # self.act = act_layer()
+        self.act = gelu_fused
         self.fc2 = nn.Linear(hidden_features, out_features, bias=bias)
         self.drop = nn.Dropout(drop)
 
+    @torch.compile
+    def forward_infer(self, x):
+        x = self.fc1(x)
+        x = 0.5 * x * (1 + torch.erf(x * 2**-0.5))
+        x = self.fc2(x)
+        return x
+
     def forward(self, x: Tensor) -> Tensor:
+        return self.forward_infer(x)
+
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop(x)

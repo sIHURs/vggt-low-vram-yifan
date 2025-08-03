@@ -66,13 +66,16 @@ def run_model(target_dir, model) -> dict:
     images = load_and_preprocess_images(image_names).to(device)
     print(f"Preprocessed images shape: {images.shape}")
 
+    # dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
+    dtype = torch.float16
+    model = model.to(dtype)
+    images = images.to(dtype)
+
     # Run inference
     print("Running inference...")
-    dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
 
     with torch.no_grad():
-        with torch.cuda.amp.autocast(dtype=dtype):
-            predictions = model(images)
+        predictions = model(images)
 
     # Convert pose encoding to extrinsic and intrinsic matrices
     print("Converting pose encoding to extrinsic and intrinsic matrices...")
@@ -80,6 +83,9 @@ def run_model(target_dir, model) -> dict:
     predictions["extrinsic"] = extrinsic
     predictions["intrinsic"] = intrinsic
 
+    for key in predictions.keys():
+        if isinstance(predictions[key], torch.Tensor):
+            print(key, predictions[key].shape, predictions[key].dtype)
     # Convert tensors to numpy
     for key in predictions.keys():
         if isinstance(predictions[key], torch.Tensor):

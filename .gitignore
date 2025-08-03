@@ -1,6 +1,9 @@
 .hydra/
 output/
 ckpt/
+.gradio/
+input_images_*
+examples/*/sparse/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 **/__pycache__/

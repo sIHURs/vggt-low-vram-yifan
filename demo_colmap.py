@@ -62,7 +62,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def run_VGGT(model, images, dtype, resolution=518):
+def run_VGGT(model, images, resolution=518):
     # images: [B, 3, H, W]
 
     assert len(images.shape) == 4
@@ -72,9 +72,8 @@ def run_VGGT(model, images, dtype, resolution=518):
     images = F.interpolate(images, size=(resolution, resolution), mode="bilinear", align_corners=False)
 
     with torch.no_grad():
-        with torch.cuda.amp.autocast(dtype=dtype):
-            images = images[None]  # add batch dimension
-            aggregated_tokens_list, ps_idx = model.aggregator(images)
+        images = images[None]  # add batch dimension
+        aggregated_tokens_list, ps_idx = model.aggregator(images)
 
         # Predict Cameras
         pose_enc = model.camera_head(aggregated_tokens_list)[-1]
@@ -114,7 +113,7 @@ def demo_fn(args):
     _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
     model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
     model.eval()
-    model = model.to(device)
+    model = model.to(device).to(dtype)
     print(f"Model loaded")
 
     # Get image paths and preprocess them
@@ -136,7 +135,7 @@ def demo_fn(args):
 
     # Run VGGT to estimate camera and depth
     # Run with 518x518 images
-    extrinsic, intrinsic, depth_map, depth_conf = run_VGGT(model, images, dtype, vggt_fixed_resolution)
+    extrinsic, intrinsic, depth_map, depth_conf = run_VGGT(model, images.to(dtype), vggt_fixed_resolution)
     points_3d = unproject_depth_map_to_point_map(depth_map, extrinsic, intrinsic)
 
     if args.use_ba:
@@ -144,6 +143,7 @@ def demo_fn(args):
         scale = img_load_resolution / vggt_fixed_resolution
         shared_camera = args.shared_camera
 
+        # TODO: use VGGT tracker
         with torch.cuda.amp.autocast(dtype=dtype):
             # Predicting Tracks
             # Using VGGSfM tracker instead of VGGT tracker for efficiency

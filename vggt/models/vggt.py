@@ -26,7 +26,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         self.depth_head = DPTHead(dim_in=2 * embed_dim, output_dim=2, activation="exp", conf_activation="expp1") if enable_depth else None
         self.track_head = TrackHead(dim_in=2 * embed_dim, patch_size=patch_size) if enable_track else None
 
-    def forward(self, images: torch.Tensor, query_points: torch.Tensor = None):
+    def forward(self, images: torch.Tensor, query_points: torch.Tensor = None, verbose: bool = False):
         """
         Forward pass of the VGGT model.
 
@@ -58,17 +58,22 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         if query_points is not None and len(query_points.shape) == 2:
             query_points = query_points.unsqueeze(0)
 
-        aggregated_tokens_list, patch_start_idx = self.aggregator(images)
+        aggregated_tokens_list, patch_start_idx = self.aggregator(images, verbose=verbose)
 
         predictions = {}
 
-        with torch.cuda.amp.autocast(enabled=False):
+        # with torch.cuda.amp.autocast(enabled=False):
+        with torch.inference_mode():
             if self.camera_head is not None:
+                if verbose:
+                    print("Running camera head")
                 pose_enc_list = self.camera_head(aggregated_tokens_list)
                 predictions["pose_enc"] = pose_enc_list[-1]  # pose encoding of the last iteration
                 predictions["pose_enc_list"] = pose_enc_list
                 
             if self.depth_head is not None:
+                if verbose:
+                    print("Running depth head")
                 depth, depth_conf = self.depth_head(
                     aggregated_tokens_list, images=images, patch_start_idx=patch_start_idx
                 )
@@ -76,6 +81,8 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
                 predictions["depth_conf"] = depth_conf
 
             if self.point_head is not None:
+                if verbose:
+                    print("Running point head")
                 pts3d, pts3d_conf = self.point_head(
                     aggregated_tokens_list, images=images, patch_start_idx=patch_start_idx
                 )
@@ -83,6 +90,8 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
                 predictions["world_points_conf"] = pts3d_conf
 
         if self.track_head is not None and query_points is not None:
+            if verbose:
+                print("Running track head")
             track_list, vis, conf = self.track_head(
                 aggregated_tokens_list, images=images, patch_start_idx=patch_start_idx, query_points=query_points
             )
@@ -91,7 +100,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
             predictions["conf"] = conf
 
         if not self.training:
-            predictions["images"] = images  # store the images for visualization during inference
+            predictions["images"] = images.float()  # store the images for visualization during inference
 
         return predictions
 
