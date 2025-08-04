@@ -1,6 +1,6 @@
 # Low-VRAM VGGT Inference
 
-End-to-end 3D reconstruction model [VGGT](https://github.com/facebookresearch/vggt) optimized for VRAM usages. This fork is for **inference only**.
+End-to-end 3D reconstruction model [VGGT](https://github.com/facebookresearch/vggt) optimized for VRAM usage. This fork is for **inference only**.
 
 This optimized version uses **6 times less VRAM** than original without significant slow down. We have successfully run reconstruction for **150 images** with 8GB VRAM, or **1100 images** with 32GB VRAM.
 
@@ -14,48 +14,48 @@ This optimized version uses **6 times less VRAM** than original without signific
 
 ## Benchmark
 
+Each benchmark runs a full forward through embedding, aggregator, and camera/depth/point heads. See `benchmark/` for code used for benchmark.
+
 ### Ours results ([commit](https://github.com/harry7557558/vggt-low-vram/commit/100f7b5813c35561a425b1dd32f9d8bef10063fb)):
 
-|  | example room (8) | example kitchen (25) | M360 stump (125) | M360 room (311) | ZipNeRF nyc (990) | IMC-PT bdbg-gate (1363) | ZipNeRF london (1874) |
-| :------- | :------: | -------: | -------: | -------: | -------: | -------: | -------: |
-| VRAM | 3.27GB | 3.50GB | 5.83GB | 10.97GB | 25.37GB | 58.03GB | 45.92GB |
-| RTX 5070 laptop (8GB) | 1.97s | 4.80s | 48.47s | - | - | - | - |
-| RTX 4090 (24GB) | 2.65s | 4.31s | 16.49s | 66.42s | - | - | - |
-| RTX 5090 (32GB) | 0.97s | 1.61s | 9.97s | 44.06s | 275.91s | - | - |
-| RTX A6000 (48GB) | 1.40s | 3.47s | 21.71s | 103.45s | 687.31s | - | - |
-| A100 SXM4 (80GB) | 2.88s | 4.10s | 15.36s | 62.86s | 376.65s | 2163.30s | 1326.58s |
-| H100 NVL (94GB) | 1.10s | 1.67s | 8.52s | 42.41s | 288.55s | 1733.15s | 1052.18s |
+|  | example room (8) | example kitchen (25) | MipNeRF&nbsp;360 stump (125) | MipNeRF&nbsp;360 room (311) | ZipNeRF nyc (990) | IMC-PT bdbg-gate (1363) | ZipNeRF london (1874) |
+| :------- | :------: | :-------: | :-------: | :-------: | :-------: | :-------: | :-------: |
+| VRAM | 3.27&nbsp;GB | 3.50&nbsp;GB | 5.83&nbsp;GB | 10.97&nbsp;GB | 25.37&nbsp;GB | 58.03&nbsp;GB | 45.92&nbsp;GB |
+| RTX&nbsp;5070<br>laptop&nbsp;(8GB) | 1.97&nbsp;s | 4.80&nbsp;s | 48.47&nbsp;s | - | - | - | - |
+| RTX&nbsp;4090<br>(24GB) | 2.65&nbsp;s | 4.31&nbsp;s | 16.49&nbsp;s | 66.42&nbsp;s | - | - | - |
+| RTX&nbsp;5090<br>(32GB) | 0.97&nbsp;s | 1.61&nbsp;s | 9.97&nbsp;s | 44.06&nbsp;s | 275.91&nbsp;s | - | - |
+| RTX&nbsp;A6000<br>(48GB) | 1.40&nbsp;s | 3.47&nbsp;s | 21.71&nbsp;s | 103.45&nbsp;s | 687.31&nbsp;s | - | - |
+| A100&nbsp;SXM4<br>(80GB) | 2.88&nbsp;s | 4.10&nbsp;s | 15.36&nbsp;s | 62.86&nbsp;s | 376.65&nbsp;s | 2163.30&nbsp;s | 1326.58&nbsp;s |
+| H100&nbsp;NVL<br>(94GB) | 1.10&nbsp;s | 1.67&nbsp;s | 8.52&nbsp;s | 42.41&nbsp;s | 288.55&nbsp;s | 1733.15&nbsp;s | 1052.18&nbsp;s |
 
 ### Baseline results ([commit](https://github.com/facebookresearch/vggt/commit/8492456ce358ee9a4fe3274e36d73106b640fb5c)):
 
-|  | example room (8) | example kitchen (25) | M360 stump (125) | M360 room (311) | ZipNeRF nyc (990) | IMC-PT bdbg-gate (1363) | ZipNeRF london (1874) |
-| :------- | :------: | -------: | -------: | -------: | -------: | -------: | -------: |
-| VRAM | 9.72GB | 12.34GB | 31.52GB | 68.95GB | - | - | - |
-| RTX 5070 laptop (8GB) | - | - | - | - | - | - | - |
-| RTX 4090 (24GB) | 0.86s | 1.80s | - | - | - | - | - |
-| RTX 5090 (32GB) | 0.57s | 1.22s | - | - | - | - | - |
-| RTX A6000 (48GB) | 0.92s | 2.22s | 19.77s | - | - | - | - |
-| A100 SXM4 (80GB) | 1.09s | 1.74s | 11.39s | 54.54s | - | - | - |
-| H100 NVL (94GB) | 0.53s | 1.00s | 7.99s | 41.15s | - | - | - |
+|  | example room (8) | example kitchen (25) | MipNeRF&nbsp;360 stump (125) | MipNeRF&nbsp;360 room (311) | ZipNeRF nyc (990) | IMC-PT bdbg-gate (1363) | ZipNeRF london (1874) |
+| :------- | :------: | :-------: | :-------: | :-------: | :-------: | :-------: | :-------: |
+| VRAM | 9.72&nbsp;GB | 12.34&nbsp;GB | 31.52&nbsp;GB | 68.95&nbsp;GB | - | - | - |
+| RTX&nbsp;5070<br>laptop&nbsp;(8GB) | - | - | - | - | - | - | - |
+| RTX&nbsp;4090<br>(24GB) | 0.86&nbsp;s | 1.80&nbsp;s | - | - | - | - | - |
+| RTX&nbsp;5090<br>(32GB) | 0.57&nbsp;s | 1.22&nbsp;s | - | - | - | - | - |
+| RTX&nbsp;A6000<br>(48GB) | 0.92&nbsp;s | 2.22&nbsp;s | 19.77&nbsp;s | - | - | - | - |
+| A100&nbsp;SXM4<br>(80GB) | 1.09&nbsp;s | 1.74&nbsp;s | 11.39&nbsp;s | 54.54&nbsp;s | - | - | - |
+| H100&nbsp;NVL<br>(94GB) | 0.53&nbsp;s | 1.00&nbsp;s | 7.99&nbsp;s | 41.15&nbsp;s | - | - | - |
 
 
-### Baseline vs Ours<br/>
+### Baseline vs. Ours<br/>
 <!-- (time is ratio of total time of runs that are successful with both methods) -->
 
-Ours use multiple times less VRAM. Ours is slower, but time difference is less significant for larger datasets.
+Ours use multiple times less VRAM. Ours is consistently slower, but time difference is less significant for larger datasets.
 
 | # images | 8 | 25 | 125 | 311 |
-| :------- | :------: | -------: | -------: | -------: |
-| VRAM | 3.0x | 3.5x | 5.4x | 6.3x |
-| Time | 0.44x | 0.53x | 0.86x | 0.91x |
+| :------- | :------: | :-------: | :-------: | :-------: |
+| VRAM | 3.0&nbsp;x | 3.5&nbsp;x | 5.4&nbsp;x | 6.3&nbsp;x |
+| Time | 0.44&nbsp;x | 0.53&nbsp;x | 0.86&nbsp;x | 0.91&nbsp;x |
 
 ### Additional details
 
 Hardware and platform:
 - RTX 5070 is my local device (CUDA 12.8, PyTorch 2.7.1, Python 3.12, Ubuntu 24.04).
 - Rest of GPUs are provided by https://cloud.vast.ai/ with "PyTorch (Vast)" image without further modification (CUDA 12.4/12.8, PyTorch 2.5.1/2.7.1, Python 3.10/3.12).
-
-See `benchmark/` for code used for benchmark.
 
 ## To Use
 
@@ -93,7 +93,7 @@ Some notes:
 - Occasional compatibility issues introduced by `@torch.compile`
 - Does not support training
 
-Not (yet) tested, feel free to issue/PR if you are experiencing problems:
+### Not (yet) tested, feel free to issue/PR if you are experiencing problems:
 - Point tracking
 - Different OS/Python/PyTorch/CUDA versions from above Benchmark section
 - Multi GPU, or running on CPU
