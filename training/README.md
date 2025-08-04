@@ -1,3 +1,14 @@
+# DEPRECATED
+
+This fork is for **inference only**. It does not support training.
+
+<div><br/></div>
+
+----
+# ==== Old README below ====
+
+<div><br/></div>
+
 # Training
 
 This is a re-implementation of our framework for training VGGT. This document shows how to set up the environment and run VGGT training. I have aimed to faithfully reproduce the original training framework, but please open an issue if anything looks off.

@@ -1,3 +1,111 @@
+# Low-VRAM VGGT Inference
+
+End-to-end 3D reconstruction model [VGGT](https://github.com/facebookresearch/vggt) optimized for VRAM usages. This fork is for **inference only**.
+
+This optimized version uses **6 times less VRAM** than original without significant slow down. We have successfully run reconstruction for **150 images** with 8GB VRAM, or **1100 images** with 32GB VRAM.
+
+## Main optimizations
+- Original model's aggregator stores intermediate outputs of all 24 attention blocks, but only 4 of them is used by prediction heads. Made it return only that 4.
+- `torch.cuda.amp.autocast` doesn't seem to be smart. A lot of large tensors are still stored in FP32. Do mixed precision manually instead.
+- For a lot of modules, `self.training` is True even with `torch.no_grad()`. Removed all branches that involve `self.training` that potentially lead to overhead.
+- `del` unused intermediate tensors to free memory for subsequent code
+- `@torch.compile` some functions (e.g. MLP with GELU, LayerNorm)
+- `torch.cuda.empty_cache()` when helpful
+
+## Benchmark
+
+### Ours results ([commit](https://github.com/harry7557558/vggt-low-vram/commit/100f7b5813c35561a425b1dd32f9d8bef10063fb)):
+
+|  | example room (8) | example kitchen (25) | M360 stump (125) | M360 room (311) | ZipNeRF nyc (990) | IMC-PT bdbg-gate (1363) | ZipNeRF london (1874) |
+| :------- | :------: | -------: | -------: | -------: | -------: | -------: | -------: |
+| VRAM | 3.27GB | 3.50GB | 5.83GB | 10.97GB | 25.37GB | 58.03GB | 45.92GB |
+| RTX 5070 laptop (8GB) | 1.97s | 4.80s | 48.47s | - | - | - | - |
+| RTX 4090 (24GB) | 2.65s | 4.31s | 16.49s | 66.42s | - | - | - |
+| RTX 5090 (32GB) | 0.97s | 1.61s | 9.97s | 44.06s | 275.91s | - | - |
+| RTX A6000 (48GB) | 1.40s | 3.47s | 21.71s | 103.45s | 687.31s | - | - |
+| A100 SXM4 (80GB) | 2.88s | 4.10s | 15.36s | 62.86s | 376.65s | 2163.30s | 1326.58s |
+| H100 NVL (94GB) | 1.10s | 1.67s | 8.52s | 42.41s | 288.55s | 1733.15s | 1052.18s |
+
+### Baseline results ([commit](https://github.com/facebookresearch/vggt/commit/8492456ce358ee9a4fe3274e36d73106b640fb5c)):
+
+|  | example room (8) | example kitchen (25) | M360 stump (125) | M360 room (311) | ZipNeRF nyc (990) | IMC-PT bdbg-gate (1363) | ZipNeRF london (1874) |
+| :------- | :------: | -------: | -------: | -------: | -------: | -------: | -------: |
+| VRAM | 9.72GB | 12.34GB | 31.52GB | 68.95GB | - | - | - |
+| RTX 5070 laptop (8GB) | - | - | - | - | - | - | - |
+| RTX 4090 (24GB) | 0.86s | 1.80s | - | - | - | - | - |
+| RTX 5090 (32GB) | 0.57s | 1.22s | - | - | - | - | - |
+| RTX A6000 (48GB) | 0.92s | 2.22s | 19.77s | - | - | - | - |
+| A100 SXM4 (80GB) | 1.09s | 1.74s | 11.39s | 54.54s | - | - | - |
+| H100 NVL (94GB) | 0.53s | 1.00s | 7.99s | 41.15s | - | - | - |
+
+
+### Baseline vs Ours<br/>
+<!-- (time is ratio of total time of runs that are successful with both methods) -->
+
+Ours use multiple times less VRAM. Ours is slower, but time difference is less significant for larger datasets.
+
+| # images | 8 | 25 | 125 | 311 |
+| :------- | :------: | -------: | -------: | -------: |
+| VRAM | 3.0x | 3.5x | 5.4x | 6.3x |
+| Time | 0.44x | 0.53x | 0.86x | 0.91x |
+
+### Additional details
+
+Hardware and platform:
+- RTX 5070 is my local device (CUDA 12.8, PyTorch 2.7.1, Python 3.12, Ubuntu 24.04).
+- Rest of GPUs are provided by https://cloud.vast.ai/ with "PyTorch (Vast)" image without further modification (CUDA 12.4/12.8, PyTorch 2.5.1/2.7.1, Python 3.10/3.12).
+
+See `benchmark/` for code used for benchmark.
+
+## To Use
+
+This fork can be installed in the same way as the original VGGT (i.e. follow the original instruction but change the git clone link). It runs the same checkpoints.
+
+`demo_gradio.py` and `demo_viser.py` should work as before. `demo_colmap.py` may also work, although not throughly tested.
+
+See `benchmark/benchmark.py` for a full example. For basic usage:
+
+```py
+import torch
+from vggt.models.vggt import VGGT
+from vggt.utils.load_fn import load_and_preprocess_images
+from vggt.utils.pose_enc import pose_encoding_to_extri_intri
+
+dtype = torch.bfloat16 # or torch.float16 or torch.float32
+model = VGGT.from_pretrained("facebook/VGGT-1B").cuda().to(dtype)
+images = load_and_preprocess_images(["...list of image paths"]).cuda().to(dtype)
+with torch.no_grad():
+    predictions = model(images, verbose=True)  # will compute in (mostly) dtype and output in FP32
+    extrinsic, intrinsic = pose_encoding_to_extri_intri(predictions['pose_enc'], images.shape[-2:])
+```
+
+Some notes:
+
+- Model weights and input images must have the same dtype. Model inference will run computation and store intermediate results largely in `images.dtype`.
+
+- Do not use `autocast`. This fork does mixed precision manually in the FP16/BF16 case, doing so can lead to some intermediate tensors being stored in FP32 and increase VRAM usage.
+
+
+## Breaking Changes
+- Precision loss caused by FP32 -> FP16/BF16
+    - You can always make it use FP32 and still enjoy significant VRAM reduction
+- Notes in "To Use" section above
+- Occasional compatibility issues introduced by `@torch.compile`
+- Does not support training
+
+Not (yet) tested, feel free to issue/PR if you are experiencing problems:
+- Point tracking
+- Different OS/Python/PyTorch/CUDA versions from above Benchmark section
+- Multi GPU, or running on CPU
+
+<div><br/></div>
+
+----
+# ==== Original README below ====
+
+<div><br/></div>
+
+
 <div align="center">
 <h1>VGGT: Visual Geometry Grounded Transformer</h1>
 
