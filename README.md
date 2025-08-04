@@ -18,7 +18,7 @@ Each benchmark runs a full forward through embedding, aggregator, and camera/dep
 
 ### Ours results ([commit](https://github.com/harry7557558/vggt-low-vram/commit/100f7b5813c35561a425b1dd32f9d8bef10063fb)):
 
-|  | example room (8) | example kitchen (25) | MipNeRF&nbsp;360 stump (125) | MipNeRF&nbsp;360 room (311) | ZipNeRF nyc (990) | IMC-PT bdbg-gate (1363) | ZipNeRF london (1874) |
+|  | example room (8) | example kitchen (25) | Mip-NeRF 360 stump (125) | Mip-NeRF 360 room (311) | Zip-NeRF nyc (990) | IMC-PT bdbg-gate (1363) | Zip-NeRF london (1874) |
 | :------- | :------: | :-------: | :-------: | :-------: | :-------: | :-------: | :-------: |
 | VRAM | 3.27&nbsp;GB | 3.50&nbsp;GB | 5.83&nbsp;GB | 10.97&nbsp;GB | 25.37&nbsp;GB | 58.03&nbsp;GB | 45.92&nbsp;GB |
 | RTX&nbsp;5070<br>laptop&nbsp;(8GB) | 1.97&nbsp;s | 4.80&nbsp;s | 48.47&nbsp;s | - | - | - | - |
@@ -30,7 +30,7 @@ Each benchmark runs a full forward through embedding, aggregator, and camera/dep
 
 ### Baseline results ([commit](https://github.com/facebookresearch/vggt/commit/8492456ce358ee9a4fe3274e36d73106b640fb5c)):
 
-|  | example room (8) | example kitchen (25) | MipNeRF&nbsp;360 stump (125) | MipNeRF&nbsp;360 room (311) | ZipNeRF nyc (990) | IMC-PT bdbg-gate (1363) | ZipNeRF london (1874) |
+|  | example room (8) | example kitchen (25) | Mip-NeRF 360 stump (125) | Mip-NeRF 360 room (311) | Zip-NeRF nyc (990) | IMC-PT bdbg-gate (1363) | Zip-NeRF london (1874) |
 | :------- | :------: | :-------: | :-------: | :-------: | :-------: | :-------: | :-------: |
 | VRAM | 9.72&nbsp;GB | 12.34&nbsp;GB | 31.52&nbsp;GB | 68.95&nbsp;GB | - | - | - |
 | RTX&nbsp;5070<br>laptop&nbsp;(8GB) | - | - | - | - | - | - | - |
