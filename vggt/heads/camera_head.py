@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from vggt.layers import Mlp
+from vggt.layers import Mlp, MlpFP32
 from vggt.layers.block import Block
 from vggt.heads.head_act import activate_pose
 
@@ -68,7 +68,22 @@ class CameraHead(nn.Module):
 
         # Adaptive layer normalization without affine parameters.
         self.adaln_norm = nn.LayerNorm(dim_in, elementwise_affine=False, eps=1e-6)
-        self.pose_branch = Mlp(in_features=dim_in, hidden_features=dim_in // 2, out_features=self.target_dim, drop=0)
+        self.pose_branch = MlpFP32(in_features=dim_in, hidden_features=dim_in // 2, out_features=self.target_dim, drop=0)
+
+    def to(self, *args, **kwargs):
+        self.trunk = self.trunk.to(*args, **kwargs)
+        self.token_norm = self.token_norm.to(*args, **kwargs)
+        self.trunk_norm = self.trunk_norm.to(*args, **kwargs)
+        self.poseLN_modulation = self.poseLN_modulation.to(*args, **kwargs)
+        self.adaln_norm = self.adaln_norm.to(*args, **kwargs)
+        self.pose_branch = self.pose_branch.to(*args, **kwargs)
+
+        # keep these parameters in FP32
+        args, kwargs = MlpFP32.map_to_args_to_float(args, kwargs)
+        self.empty_pose_tokens = nn.Parameter(self.empty_pose_tokens.to(*args, **kwargs))
+        self.embed_pose = self.embed_pose.to(*args, **kwargs)
+
+        return self
 
     def forward(self, aggregated_tokens_list: dict, num_iterations: int = 4) -> list:
         """
@@ -105,6 +120,7 @@ class CameraHead(nn.Module):
             list: List of activated camera encodings from each iteration.
         """
         B, S, C = pose_tokens.shape
+        dtype = pose_tokens.dtype
         pred_pose_enc = None
         pred_pose_enc_list = []
 
@@ -118,6 +134,7 @@ class CameraHead(nn.Module):
                 module_input = self.embed_pose(pred_pose_enc)
 
             # Generate modulation parameters and split them into shift, scale, and gate components.
+            module_input = module_input.to(dtype)
             shift_msa, scale_msa, gate_msa = self.poseLN_modulation(module_input).chunk(3, dim=-1)
 
             # Adaptive layer normalization and modulation.
@@ -133,11 +150,11 @@ class CameraHead(nn.Module):
             else:
                 pred_pose_enc = pred_pose_enc + pred_pose_enc_delta
 
-            # Apply final activation functions for translation, quaternion, and field-of-view.
-            activated_pose = activate_pose(
-                pred_pose_enc.float(), trans_act=self.trans_act, quat_act=self.quat_act, fl_act=self.fl_act
-            )
-            pred_pose_enc_list.append(activated_pose)
+        # Apply final activation functions for translation, quaternion, and field-of-view.
+        activated_pose = activate_pose(
+            pred_pose_enc.float(), trans_act=self.trans_act, quat_act=self.quat_act, fl_act=self.fl_act
+        )
+        pred_pose_enc_list.append(activated_pose)
 
         return pred_pose_enc_list
 

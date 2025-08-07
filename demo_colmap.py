@@ -62,7 +62,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def run_VGGT(model, images, resolution=518):
+def run_VGGT(model, images, device, dtype, resolution=518):
     # images: [B, 3, H, W]
 
     assert len(images.shape) == 4
@@ -70,10 +70,11 @@ def run_VGGT(model, images, resolution=518):
 
     # hard-coded to use 518 for VGGT
     images = F.interpolate(images, size=(resolution, resolution), mode="bilinear", align_corners=False)
+    images = images.to(dtype).to(device)
 
     with torch.no_grad():
         images = images[None]  # add batch dimension
-        aggregated_tokens_list, ps_idx = model.aggregator(images)
+        aggregated_tokens_list, ps_idx = model.aggregator(images, verbose=True)
 
         # Predict Cameras
         pose_enc = model.camera_head(aggregated_tokens_list)[-1]
@@ -113,7 +114,7 @@ def demo_fn(args):
     _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
     model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
     model.eval()
-    model = model.to(device).to(dtype)
+    model = model.to(dtype=dtype, device=device)
     print(f"Model loaded")
 
     # Get image paths and preprocess them
@@ -129,14 +130,16 @@ def demo_fn(args):
     img_load_resolution = 1024
 
     images, original_coords = load_and_preprocess_images_square(image_path_list, img_load_resolution)
-    images = images.to(device)
-    original_coords = original_coords.to(device)
     print(f"Loaded {len(images)} images from {image_dir}")
 
     # Run VGGT to estimate camera and depth
     # Run with 518x518 images
-    extrinsic, intrinsic, depth_map, depth_conf = run_VGGT(model, images.to(dtype), vggt_fixed_resolution)
+    extrinsic, intrinsic, depth_map, depth_conf = run_VGGT(model, images, device, dtype, vggt_fixed_resolution)
     points_3d = unproject_depth_map_to_point_map(depth_map, extrinsic, intrinsic)
+    images = images.float()
+
+    images = images.to(device)
+    original_coords = original_coords.to(device)
 
     if args.use_ba:
         image_size = np.array(images.shape[-2:])

@@ -14,6 +14,7 @@ from typing import List, Dict, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from vggt.layers import MlpFP32
 from .head_act import activate_head
 from .utils import create_uv_grid, position_grid_to_embed
 
@@ -56,6 +57,7 @@ class DPTHead(nn.Module):
     ) -> None:
         super(DPTHead, self).__init__()
         self.patch_size = patch_size
+        self.output_dim = output_dim
         self.activation = activation
         self.conf_activation = conf_activation
         self.pos_embed = pos_embed
@@ -111,6 +113,23 @@ class DPTHead(nn.Module):
                 nn.ReLU(inplace=True),
                 nn.Conv2d(head_features_2, output_dim, kernel_size=1, stride=1, padding=0),
             )
+
+    def to(self, *args, **kwargs):
+        self.norm = self.norm.to(*args, **kwargs)
+        self.projects = self.projects.to(*args, **kwargs)
+        self.resize_layers = self.resize_layers.to(*args, **kwargs)
+        for key in ('layer1_rn', 'layer2_rn', 'layer3_rn', 'layer4_rn',
+                    'refinenet1', 'refinenet2', 'refinenet3', 'refinenet4',
+                    'output_conv1'):
+            if not hasattr(self.scratch, key):
+                continue
+            setattr(self.scratch, key, getattr(self.scratch, key).to(*args, **kwargs))
+
+        # keep output_conv2 in FP32
+        args, kwargs = MlpFP32.map_to_args_to_float(args, kwargs)
+        self.scratch.output_conv2 = self.scratch.output_conv2.to(*args, **kwargs)
+
+        return self
 
     def forward(
         self,
@@ -240,10 +259,20 @@ class DPTHead(nn.Module):
         if self.feature_only:
             return out.view(B, S, *out.shape[1:])
 
-        out = self.scratch.output_conv2(out)
+        # out = self.scratch.output_conv2(out)
+        # out = self.scratch.output_conv2.float()(out.float())
+        # out = self.scratch.output_conv2.half()(out.half())
+        # out = self.scratch.output_conv2[-1].float()(self.scratch.output_conv2[:2](out).float())
+
+        out1 = torch.empty((out.shape[0], self.output_dim, *out.shape[2:]),
+                           dtype=torch.float32, device=out.device).contiguous()
+        mini_batch = 4
+        for i0 in range(0, out.shape[0], mini_batch):
+            i1 = min(i0 + mini_batch, out.shape[0])
+            out1[i0:i1] = self.scratch.output_conv2(out[i0:i1].float().contiguous())
+        out = out1
         torch.cuda.empty_cache()
 
-        out = out.float()
         preds, conf = activate_head(out, activation=self.activation, conf_activation=self.conf_activation)
 
         preds = preds.view(B, S, *preds.shape[1:])

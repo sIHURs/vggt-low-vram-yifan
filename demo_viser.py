@@ -339,6 +339,7 @@ def main():
     """
     args = parser.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
     print(f"Using device: {device}")
 
     print("Initializing and loading VGGT model...")
@@ -349,23 +350,19 @@ def main():
     model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
 
     model.eval()
-    model = model.to(device)
+    model = model.to(dtype=dtype, device=device)
 
     # Use the provided image folder path
     print(f"Loading images from {args.image_folder}...")
     image_names = glob.glob(os.path.join(args.image_folder, "*"))
     print(f"Found {len(image_names)} images")
 
-    images = load_and_preprocess_images(image_names).to(device)
+    images = load_and_preprocess_images(image_names).to(dtype=dtype, device=device)
     print(f"Preprocessed images shape: {images.shape}")
 
     print("Running inference...")
-    dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
-    model = model.to(dtype)
-    images = images.to(dtype)
-
     with torch.no_grad():
-        predictions = model(images)
+        predictions = model(images, verbose=True)
 
     print("Converting pose encoding to extrinsic and intrinsic matrices...")
     extrinsic, intrinsic = pose_encoding_to_extri_intri(predictions["pose_enc"], images.shape[-2:])

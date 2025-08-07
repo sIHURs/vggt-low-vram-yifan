@@ -24,6 +24,7 @@ from vggt.utils.load_fn import load_and_preprocess_images
 from vggt.utils.pose_enc import pose_encoding_to_extri_intri
 from vggt.utils.geometry import unproject_depth_map_to_point_map
 
+dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 print("Initializing and loading VGGT model...")
@@ -32,10 +33,8 @@ print("Initializing and loading VGGT model...")
 model = VGGT()
 _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
 model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
-
-
 model.eval()
-model = model.to(device)
+model = model.to(dtype=dtype, device=device)
 
 
 # -------------------------------------------------------------------------
@@ -52,10 +51,6 @@ def run_model(target_dir, model) -> dict:
     if not torch.cuda.is_available():
         raise ValueError("CUDA is not available. Check your environment.")
 
-    # Move model to device
-    model = model.to(device)
-    model.eval()
-
     # Load and preprocess images
     image_names = glob.glob(os.path.join(target_dir, "images", "*"))
     image_names = sorted(image_names)
@@ -63,19 +58,14 @@ def run_model(target_dir, model) -> dict:
     if len(image_names) == 0:
         raise ValueError("No images found. Check your upload.")
 
-    images = load_and_preprocess_images(image_names).to(device)
+    images = load_and_preprocess_images(image_names).to(dtype=dtype, device=device)
     print(f"Preprocessed images shape: {images.shape}")
-
-    # dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
-    dtype = torch.float16
-    model = model.to(dtype)
-    images = images.to(dtype)
 
     # Run inference
     print("Running inference...")
 
     with torch.no_grad():
-        predictions = model(images)
+        predictions = model(images, verbose=True)
 
     # Convert pose encoding to extrinsic and intrinsic matrices
     print("Converting pose encoding to extrinsic and intrinsic matrices...")
@@ -83,9 +73,6 @@ def run_model(target_dir, model) -> dict:
     predictions["extrinsic"] = extrinsic
     predictions["intrinsic"] = intrinsic
 
-    for key in predictions.keys():
-        if isinstance(predictions[key], torch.Tensor):
-            print(key, predictions[key].shape, predictions[key].dtype)
     # Convert tensors to numpy
     for key in predictions.keys():
         if isinstance(predictions[key], torch.Tensor):

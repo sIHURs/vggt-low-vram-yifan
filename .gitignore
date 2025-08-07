@@ -4,6 +4,9 @@ ckpt/
 .gradio/
 input_images_*
 examples/*/sparse/
+examples/*/outputs
+examples/*/transforms.json
+examples/*/sparse_pc.ply
 # Byte-compiled / optimized / DLL files
 __pycache__/
 **/__pycache__/
