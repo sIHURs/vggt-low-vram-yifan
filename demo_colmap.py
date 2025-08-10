@@ -70,7 +70,7 @@ def run_VGGT(model, images, device, dtype, resolution=518):
 
     # hard-coded to use 518 for VGGT
     images = F.interpolate(images, size=(resolution, resolution), mode="bilinear", align_corners=False)
-    images = images.to(dtype).to(device)
+    images = images.to(device, dtype)
 
     with torch.no_grad():
         images = images[None]  # add batch dimension
@@ -136,9 +136,12 @@ def demo_fn(args):
     # Run with 518x518 images
     extrinsic, intrinsic, depth_map, depth_conf = run_VGGT(model, images, device, dtype, vggt_fixed_resolution)
     points_3d = unproject_depth_map_to_point_map(depth_map, extrinsic, intrinsic)
-    images = images.float()
+    # images = images.float()
 
-    images = images.to(device)
+    del model  # free memory
+    torch.cuda.empty_cache()
+
+    images = images.to(device, dtype)
     original_coords = original_coords.to(device)
 
     if args.use_ba:
@@ -147,7 +150,7 @@ def demo_fn(args):
         shared_camera = args.shared_camera
 
         # TODO: use VGGT tracker
-        with torch.cuda.amp.autocast(dtype=dtype):
+        with torch.inference_mode():
             # Predicting Tracks
             # Using VGGSfM tracker instead of VGGT tracker for efficiency
             # VGGT tracker requires multiple backbone runs to query different frames (this is a problem caused by the training process)
@@ -202,6 +205,7 @@ def demo_fn(args):
 
         image_size = np.array([vggt_fixed_resolution, vggt_fixed_resolution])
         num_frames, height, width, _ = points_3d.shape
+        images = images.float()
 
         points_rgb = F.interpolate(
             images, size=(vggt_fixed_resolution, vggt_fixed_resolution), mode="bilinear", align_corners=False
