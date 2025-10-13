@@ -17,7 +17,8 @@ from tqdm.auto import tqdm
 import viser
 import viser.transforms as viser_tf
 import cv2
-
+import torchvision.transforms as T
+from PIL import Image
 
 try:
     import onnxruntime
@@ -66,8 +67,38 @@ def viser_wrapper(
     server = viser.ViserServer(host="0.0.0.0", port=port)
     server.gui.configure_theme(titlebar_content=None, control_layout="collapsible")
 
+    if "images" not in pred_dict:
+        if image_folder is None or not os.path.isdir(image_folder):
+            raise ValueError("❌ image_folder must be provided when 'images' are not in pred_dict.")
+
+        print(f"📂 Loading images from {image_folder}")
+        image_names = sorted([
+            os.path.join(image_folder, f)
+            for f in os.listdir(image_folder)
+            if f.lower().endswith(('.png', '.jpg', '.jpeg'))
+        ])
+        if len(image_names) == 0:
+            raise RuntimeError(f"No images found in {image_folder}")
+        # print("len image_names:", len(image_names), image_names)
+        
+        target_size = (518, 518)
+
+        images_list = []
+        for p in image_names:
+            img = Image.open(p).convert("RGB")          # HWC, RGB
+            img = img.resize(target_size, resample=Image.BILINEAR)
+            img_np = np.array(img, dtype=np.float32) / 255.0  # Normalize to [0,1]
+            img_np = np.transpose(img_np, (2, 0, 1))   # CHW
+            images_list.append(img_np)
+
+        images = np.stack(images_list, axis=0)  # (S, 3, H, W)
+        # pred_dict["images"] = images
+        print(f"✅ Loaded {len(images)} images of size {images.shape[-2]}x{images.shape[-1]}")
+
+    else:
+        images = pred_dict["images"]  # (S, 3, H, W)
     # Unpack prediction dict
-    images = pred_dict["images"]  # (S, 3, H, W)
+    
     world_points_map = pred_dict["world_points"]  # (S, H, W, 3)
     conf_map = pred_dict["world_points_conf"]  # (S, H, W)
 
@@ -88,16 +119,23 @@ def viser_wrapper(
     # Apply sky segmentation if enabled
     if mask_sky and image_folder is not None:
         conf = apply_sky_segmentation(conf, image_folder)
-
+    print(images.shape)
     # Convert images from (S, 3, H, W) to (S, H, W, 3)
     # Then flatten everything for the point cloud
     colors = images.transpose(0, 2, 3, 1)  # now (S, H, W, 3)
     S, H, W, _ = world_points.shape
 
+    print(colors.shape)
+    print(conf.shape)
+
     # Flatten
     points = world_points.reshape(-1, 3)
     colors_flat = (colors.reshape(-1, 3) * 255).astype(np.uint8)
     conf_flat = conf.reshape(-1)
+
+    print(colors_flat.shape)
+    print(conf_flat.shape)
+
 
     cam_to_world_mat = closed_form_inverse_se3(extrinsics_cam)  # shape (S, 4, 4) typically
     # For convenience, we store only (3,4) portion
@@ -309,6 +347,9 @@ parser = argparse.ArgumentParser(description="VGGT demo with viser for 3D visual
 parser.add_argument(
     "--image_folder", type=str, default="examples/kitchen/images/", help="Path to folder containing images"
 )
+parser.add_argument(
+    "--pred_path", type=str, default="examples/kitchen/images/", help="Path to saved vggt predictions"
+)
 parser.add_argument("--use_point_map", action="store_true", help="Use point map instead of depth-based points")
 parser.add_argument("--background_mode", action="store_true", help="Run the viser server in background mode")
 parser.add_argument("--port", type=int, default=8080, help="Port number for the viser server")
@@ -316,7 +357,7 @@ parser.add_argument(
     "--conf_threshold", type=float, default=25.0, help="Initial percentage of low-confidence points to filter out"
 )
 parser.add_argument("--mask_sky", action="store_true", help="Apply sky segmentation to filter out sky points")
-
+parser.add_argument("--load_pred", action="store_true", help="Load predictions")
 
 def main():
     """
@@ -339,33 +380,42 @@ def main():
     """
     args = parser.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
     print(f"Using device: {device}")
+    if not args.load_pred:
 
-    print("Initializing and loading VGGT model...")
-    # model = VGGT.from_pretrained("facebook/VGGT-1B")
+        print("Initializing and loading VGGT model...")
+        # model = VGGT.from_pretrained("facebook/VGGT-1B")
 
-    model = VGGT()
-    _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
-    model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
+        model = VGGT()
+        _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
+        model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
 
-    model.eval()
-    model = model.to(dtype=dtype, device=device)
+        model.eval()
+        model = model.to(device)
 
-    # Use the provided image folder path
-    print(f"Loading images from {args.image_folder}...")
-    image_names = glob.glob(os.path.join(args.image_folder, "*"))
-    print(f"Found {len(image_names)} images")
+        # Use the provided image folder path
+        print(f"Loading images from {args.image_folder}...")
+        image_names = glob.glob(os.path.join(args.image_folder, "*"))
+        print(f"Found {len(image_names)} images")
 
-    images = load_and_preprocess_images(image_names).to(dtype=dtype, device=device)
-    print(f"Preprocessed images shape: {images.shape}")
+        images = load_and_preprocess_images(image_names).to(device)
+        print(f"Preprocessed images shape: {images.shape}")
 
-    print("Running inference...")
-    with torch.no_grad():
-        predictions = model(images, verbose=True)
+        print("Running inference...")
+        dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
+
+        with torch.no_grad():
+            with torch.cuda.amp.autocast(dtype=dtype):
+                predictions = model(images)
+    else:
+        print("Loading precomputed predictions...")
+        prediction_path = args.pred_path
+        predictions = torch.load(prediction_path)
+        print(f"Loaded predictions with keys: {list(predictions.keys())}")
 
     print("Converting pose encoding to extrinsic and intrinsic matrices...")
-    extrinsic, intrinsic = pose_encoding_to_extri_intri(predictions["pose_enc"], images.shape[-2:])
+    image_shape = (518, 518)
+    extrinsic, intrinsic = pose_encoding_to_extri_intri(predictions["pose_enc"], image_shape)
     predictions["extrinsic"] = extrinsic
     predictions["intrinsic"] = intrinsic
 
