@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
+import torch
 # disable triton if arch not support
 def is_pascal():
     if not torch.cuda.is_available():
@@ -24,7 +25,7 @@ if is_pascal():
 else:
     print("🚀 Non-Pascal GPU — using optimized TorchInductor if available.")
 
-import torch
+
 import torch._dynamo
 torch._dynamo.config.suppress_errors = True
 # disable triton check
