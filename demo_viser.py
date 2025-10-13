@@ -5,6 +5,37 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
+# disable triton if arch not support
+def is_pascal():
+    if not torch.cuda.is_available():
+        print("❌ No CUDA device available.")
+        return False
+    major, minor = torch.cuda.get_device_capability()
+    print(f"🔍 CUDA Capability: {major}.{minor}")
+    return major == 6  # Pascal = 6.x
+
+if is_pascal():
+    print("✅ Detected Pascal GPU — disabling advanced features...")
+    os.environ["TORCHINDUCTOR_DISABLE"] = "1"
+    os.environ["TORCH_COMPILE_DISABLE"] = "1"
+    os.environ["TORCHDYNAMO_DISABLE"] = "1"
+    os.environ["TRITON_DISABLE"] = "1"
+    os.environ["TORCH_CUDA_FUSER_DISABLE"] = "1"
+else:
+    print("🚀 Non-Pascal GPU — using optimized TorchInductor if available.")
+
+import torch
+import torch._dynamo
+torch._dynamo.config.suppress_errors = True
+# disable triton check
+try:
+    torch._inductor
+    print("⚙️ TorchInductor on")
+except AttributeError:
+    print("✅ TorchInductor off")
+
+print("Device capability:", torch.cuda.get_device_capability())
+
 import glob
 import time
 import threading
