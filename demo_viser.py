@@ -72,6 +72,7 @@ def viser_wrapper(
     background_mode: bool = False,
     mask_sky: bool = False,
     image_folder: str = None,
+    image_number: int = 10000,
 ):
     """
     Visualize predicted 3D points and camera poses with viser.
@@ -116,7 +117,10 @@ def viser_wrapper(
         target_size = (518, 518)
 
         images_list = []
-        for p in image_names:
+        for i, p in enumerate(image_names):
+
+            if i >= image_number:
+                break
             img = Image.open(p).convert("RGB")          # HWC, RGB
             img = img.resize(target_size, resample=Image.BILINEAR)
             img_np = np.array(img, dtype=np.float32) / 255.0  # Normalize to [0,1]
@@ -382,6 +386,7 @@ parser.add_argument(
 )
 parser.add_argument("--mask_sky", action="store_true", help="Apply sky segmentation to filter out sky points")
 parser.add_argument("--load_pred", action="store_true", help="Load predictions")
+parser.add_argument("--image_num", type=int, default=10000, help="Port number for the viser server")
 
 def main():
     """
@@ -466,6 +471,7 @@ def main():
         background_mode=args.background_mode,
         mask_sky=args.mask_sky,
         image_folder=args.image_folder,
+        image_number=args.image_num
     )
     print("Visualization complete")
 
