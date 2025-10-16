@@ -151,23 +151,15 @@ def viser_wrapper(
     # Apply sky segmentation if enabled
     if mask_sky and image_folder is not None:
         conf = apply_sky_segmentation(conf, image_folder)
-    print(images.shape)
     # Convert images from (S, 3, H, W) to (S, H, W, 3)
     # Then flatten everything for the point cloud
     colors = images.transpose(0, 2, 3, 1)  # now (S, H, W, 3)
     S, H, W, _ = world_points.shape
 
-    print(colors.shape)
-    print(conf.shape)
-
     # Flatten
     points = world_points.reshape(-1, 3)
     colors_flat = (colors.reshape(-1, 3) * 255).astype(np.uint8)
     conf_flat = conf.reshape(-1)
-
-    print(colors_flat.shape)
-    print(conf_flat.shape)
-
 
     cam_to_world_mat = closed_form_inverse_se3(extrinsics_cam)  # shape (S, 4, 4) typically
     # For convenience, we store only (3,4) portion
