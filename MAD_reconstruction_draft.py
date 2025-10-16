@@ -24,6 +24,10 @@ parser.add_argument(
 parser.add_argument(
     "--class_name", type=str, default=None, help="MAD dataset class name"
 )
+parser.add_argument(
+    "--input_num", type=int, default=210, help="MAD dataset class name"
+)
+
 
 args = parser.parse_args()
 
@@ -70,7 +74,7 @@ for name in classnames:
 
     image_names = [
         os.path.join(image_dir, f"train_{i:03d}.png")
-        for i in range(0, 210)
+        for i in range(0, args.input_num)
         if os.path.exists(os.path.join(image_dir, f"train_{i:03d}.png"))
     ]
 
